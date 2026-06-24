@@ -1,20 +1,36 @@
-const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const http = require('http');
+const https = require('https');
 
-const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Максимально простое проксирование. 
-// changeOrigin: true автоматически подменит заголовок Host на "api.telegram.org",
-// а отсутствие ручных обработчиков исключит ошибку отсутствующего Host-заголовка.
-app.use(
-  '/',
-  createProxyMiddleware({
-    target: 'https://api.telegram.org',
-    changeOrigin: true,
-  })
-);
+const server = http.createServer((req, res) => {
+  // Направляем сырой URL (req.url) напрямую в Telegram API без какого-либо роутинга
+  const options = {
+    hostname: 'api.telegram.org',
+    port: 443,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers }
+  };
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  // Удаляем заголовок host, чтобы Telegram принял запрос
+  delete options.headers['host'];
+
+  const proxyReq = https.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error('Proxy error:', err);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error_code: 500, description: err.message }));
+  });
+
+  // Перенаправляем входящий поток (тело запроса, файлы, видео) напрямую
+  req.pipe(proxyReq, { end: true });
+});
+
+server.listen(PORT, () => {
+  console.log(`Native proxy server running on port ${PORT}`);
 });
