@@ -4,18 +4,15 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Перенаправляем все входящие запросы и потоки в Telegram API без ограничения по времени
+// Проксируем все запросы напрямую на Telegram API без изменения путей (это исключает двойные слеши)
 app.use(
   '/',
   createProxyMiddleware({
     target: 'https://api.telegram.org',
     changeOrigin: true,
-    pathRewrite: {
-      '^/': '/',
-    },
     on: {
       proxyReq: (proxyReq, req, res) => {
-        // Обязательно удаляем заголовок host
+        // Удаляем заголовок host, чтобы Telegram принял запрос
         proxyReq.removeHeader('host');
       }
     }
